@@ -1,0 +1,50 @@
+[build-system]
+requires = ["poetry-core>=1.8.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry]
+name = "llm-engineering"
+version = "0.1.0"
+description = "Course notebooks and experiments for LLM engineering"
+readme = "README.md"
+license = "MIT"
+authors = ["Your Name <you@example.com>"]
+package-mode = false
+
+[tool.poetry.dependencies]
+python = "^3.10"
+python-dotenv = "*"
+jupyterlab = "*"
+ipywidgets = "*"
+requests = "*"
+numpy = "*"
+pandas = "*"
+scipy = "*"
+scikit-learn = "*"
+matplotlib = "*"
+gensim = "*"
+torch = "*"
+transformers = "*"
+tqdm = "*"
+openai = "*"
+gradio = "*"
+langchain = { version = "*", extras = ["docarray"] }
+tiktoken = "*"
+faiss-cpu = "*"
+"langchain-openai" = "*"
+"langchain-experimental" = "*"
+"langchain-chroma" = "*"
+datasets = "*"
+sentencepiece = "*"
+"google-generativeai" = "*"
+anthropic = "*"
+unstructured = "*"
+chromadb = "*"
+plotly = "*"
+"jupyter-dash" = "*"
+beautifulsoup4 = "*"
+pydub = "*"
+modal = "*"
+ollama = "*"
+accelerate = "*"
+bitsandbytes = "*"
