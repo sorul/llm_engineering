@@ -7,6 +7,7 @@ from typing import List, Dict
 import random
 
 MODEL = "gpt-4o-mini"
+TRANSCRIBE_MODEL = "gpt-4o-mini-transcribe"
 
 
 def get_tools() -> List[Dict]:
@@ -37,7 +38,7 @@ def get_tools() -> List[Dict]:
 
 def get_system_message():
   return '''
-    Eres un asistente que traduce del español al inglés. No respondas a las frases del usuario, limítate a traducir literalmente todos los mensajes que te lleguen.
+    Eres un asistente que traduce del español al inglés. No respondas a las frases del usuario, limítate a traducir todos los mensajes que te lleguen.
   '''
 
 
@@ -107,6 +108,19 @@ def handle_tool_call(message):
   return response
 
 
+def transcribe_with_voice_agent(audio_path: str) -> str:
+  if not audio_path:
+    return ""
+
+  openai = OpenAI()
+  with open(audio_path, "rb") as audio_file:
+    transcript = openai.audio.transcriptions.create(
+        model=TRANSCRIBE_MODEL,
+        file=audio_file
+    )
+  return (transcript.text or "").strip()
+
+
 if __name__ == "__main__":
   load_dotenv()
 
@@ -116,6 +130,9 @@ if __name__ == "__main__":
     with gr.Row():
       entry = gr.Textbox(label="Traduce al ingles.")
     with gr.Row():
+      mic = gr.Audio(sources=["microphone"], type="filepath", label="Entrada por voz")
+      send_voice = gr.Button("Enviar voz")
+    with gr.Row():
       clear = gr.Button("Clear")
 
     def do_entry(message, history):
@@ -123,9 +140,20 @@ if __name__ == "__main__":
       history += [{"role": "user", "content": message}]
       return "", history
 
+    def do_voice(audio_path, history):
+      history = history or []
+      text = transcribe_with_voice_agent(audio_path)
+      if not text:
+        raise gr.Error("No se pudo transcribir el audio.")
+      history += [{"role": "user", "content": text}]
+      return "", history
+
     entry.submit(do_entry, inputs=[entry, chatbot], outputs=[entry, chatbot]) \
+        .then(chat, inputs=chatbot, outputs=[chatbot])
+    send_voice.click(do_voice, inputs=[mic, chatbot], outputs=[entry, chatbot]) \
         .then(chat, inputs=chatbot, outputs=[chatbot])
 
     clear.click(lambda: [], inputs=None, outputs=chatbot, queue=False)
 
-  ui.launch(inbrowser=False, height=500)
+# Especifico un puerto porque lo tengo reservado para permitir el micro
+ui.launch(server_name="0.0.0.0", server_port=7863, inbrowser=True)
