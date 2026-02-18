@@ -13,17 +13,7 @@ OLLAMA_MODEL = 'llama3.2:latest'
 HUGGINGFACE_MODEL = 'Qwen/Qwen3-0.6B'
 
 
-class HFModel:
-  def __init__(self):
-    self._hf_pipe = None
-
-  def get_hf_pipe(self):
-    if self._hf_pipe is None:
-      self._hf_pipe = pipeline("text-generation", model=HUGGINGFACE_MODEL)
-    return self._hf_pipe
-
-
-class Modelo(str, Enum):
+class Proveedor(str, Enum):
   OPENAI = "OpenAI"
   OLLAMA = "Ollama"
   HUGGINGFACE = "HuggingFace"
@@ -57,17 +47,17 @@ def _chat_with_ollama(messages):
 
 
 def _chat_with_huggingface(messages):
-  response = hf_model.get_hf_pipe()(messages)
+  response = hf_model(messages)
   generated = response[0].get("generated_text")
   last_message = generated[-1]
   content = last_message.get("content")
   return content
 
 
-def _get_chat_with_provider(provider: Modelo):
-  if provider == Modelo.OPENAI:
+def _get_chat_with_provider(provider: Proveedor):
+  if provider == Proveedor.OPENAI:
     return _chat_with_openai
-  if provider == Modelo.HUGGINGFACE:
+  if provider == Proveedor.HUGGINGFACE:
     return _chat_with_huggingface
   return _chat_with_ollama
 
@@ -94,15 +84,15 @@ def _build_messages(message: str, history: List[Dict] = []):
 
 
 def chat(message: str, history: List[Dict], provider: str):
-  selected_provider = Modelo(provider)
+  selected_provider = Proveedor(provider)
   messages = _build_messages(message, history)
   response = _get_chat_with_provider(selected_provider)(messages)
   return response
 
 
 provider_dropdown = gr.Dropdown(
-    choices=[m.value for m in Modelo],
-    value=Modelo.OLLAMA.value,
+    choices=[m.value for m in Proveedor],
+    value=Proveedor.OLLAMA.value,
     label="Proveedor de modelo",
 )
 interface = gr.ChatInterface(
@@ -116,11 +106,11 @@ interface = gr.ChatInterface(
     ),
 )
 # Necesario para cachear el pipeline de HuggingFace y no cargarlo en cada llamada:
-hf_model = HFModel()
+hf_model = pipeline("text-generation", model=HUGGINGFACE_MODEL)
 
 # - declaro una variable global "interfaz"
 # - en el main cargo el .env y lanzo la interfaz
-# - lanzo la interfaz en el puerto 7863 que tengo habilitado el microfono
+# - lanzo la interfaz en el puerto 7863
 # - en el terminal ejecuto "gradio week3/week3_exercise.py"
 # - los cambios en el html se actualizan automáticamente
 if __name__ == "__main__":
