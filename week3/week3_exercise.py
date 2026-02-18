@@ -1,23 +1,38 @@
 # imports
 
 from enum import Enum
+from typing import Dict, List
 from dotenv import load_dotenv
 import gradio as gr
 from openai import OpenAI
 import ollama
+from transformers import pipeline
 
-OPENAI_MODEL = "gpt-4o-mini"
-OLLAMA_MODEL = "llama3.2:latest"
+OPENAI_MODEL = 'gpt-4o-mini'
+OLLAMA_MODEL = 'llama3.2:latest'
+HUGGINGFACE_MODEL = 'Qwen/Qwen3-0.6B'
+
+
+class HFModel:
+  def __init__(self):
+    self._hf_pipe = None
+
+  def get_hf_pipe(self):
+    if self._hf_pipe is None:
+      self._hf_pipe = pipeline("text-generation", model=HUGGINGFACE_MODEL)
+    return self._hf_pipe
+
 
 class Modelo(str, Enum):
   OPENAI = "OpenAI"
   OLLAMA = "Ollama"
+  HUGGINGFACE = "HuggingFace"
 
 
 def get_system_message():
   return '''
     Eres un asistente especializado en generar datos sintéticos para diferentes campos. Cuando el usuario te proporcione un campo y una descripción, debes generar 5 ejemplos de datos sintéticos que se ajusten a esa descripción. Asegúrate de que los datos sean variados y realistas, siguiendo la descripción proporcionada por el usuario.
-    IMPORTANTE: responde en formato JSON. Por ejemplo:
+    IMPORTANTE: responde directamente en formato JSON. Por ejemplo:
 
     User: Dame productos de Amazon.
     Assistant: [
@@ -26,6 +41,7 @@ def get_system_message():
         {"nombre": "Fire TV Stick", "categoría": "Electrónica", "precio": 39.99},
     ]
   '''
+
 
 def _chat_with_openai(messages):
   openai_client = OpenAI()
@@ -40,65 +56,45 @@ def _chat_with_ollama(messages):
   return response["message"]["content"]
 
 
+def _chat_with_huggingface(messages):
+  response = hf_model.get_hf_pipe()(messages)
+  generated = response[0].get("generated_text")
+  last_message = generated[-1]
+  content = last_message.get("content")
+  return content
+
+
 def _get_chat_with_provider(provider: Modelo):
   if provider == Modelo.OPENAI:
     return _chat_with_openai
+  if provider == Modelo.HUGGINGFACE:
+    return _chat_with_huggingface
   return _chat_with_ollama
 
 
-def _normalize_content(content):
-  if isinstance(content, str):
-    return content
-
-  if isinstance(content, list):
-    parts = []
-    for item in content:
-      if isinstance(item, str):
-        parts.append(item)
-      elif isinstance(item, dict):
-        text = item.get("text")
-        if isinstance(text, str):
-          parts.append(text)
-    return "\n".join(part for part in parts if part).strip()
-
-  if isinstance(content, dict):
-    text = content.get("text")
-    if isinstance(text, str):
-      return text
-
-  if content is None:
-    return ""
-
-  return str(content)
+def _normalize_content(content: List):
+  parts = []
+  for item in content:
+    text = item.get("text")
+    parts.append(text)
+  return "\n".join(part for part in parts if part).strip()
 
 
-def _build_messages(message, history):
+def _build_messages(message: str, history: List[Dict] = []):
   messages = [{"role": "system", "content": get_system_message()}]
 
-  for item in (history or []):
-    if isinstance(item, dict):
-      role = item.get("role")
-      content = _normalize_content(item.get("content"))
-      if role in {"user", "assistant"} and content:
-        messages.append({"role": role, "content": content})
-      continue
+  for item in history:
+    role = item.get("role")
+    content = _normalize_content(item.get("content", []))
+    if role in {"user", "assistant"} and content:
+      messages.append({"role": role, "content": content})
 
-    if isinstance(item, (list, tuple)) and len(item) == 2:
-      user_msg, assistant_msg = item
-      user_text = _normalize_content(user_msg)
-      assistant_text = _normalize_content(assistant_msg)
-      if user_text:
-        messages.append({"role": "user", "content": user_text})
-      if assistant_text:
-        messages.append({"role": "assistant", "content": assistant_text})
-
-  user_content = _normalize_content(message)
-  messages.append({"role": "user", "content": user_content})
+  messages.append({"role": "user", "content": message})
   return messages
 
 
-def chat(message, history, provider):
-  selected_provider = provider if isinstance(provider, Modelo) else Modelo(provider)
+def chat(message: str, history: List[Dict], provider: str):
+  selected_provider = Modelo(provider)
   messages = _build_messages(message, history)
   response = _get_chat_with_provider(selected_provider)(messages)
   return response
@@ -109,7 +105,7 @@ provider_dropdown = gr.Dropdown(
     value=Modelo.OLLAMA.value,
     label="Proveedor de modelo",
 )
-interfaz = gr.ChatInterface(
+interface = gr.ChatInterface(
     # Funcion principal:
     fn=chat,
     # Nuevos inputs para la función de chat:
@@ -119,6 +115,8 @@ interfaz = gr.ChatInterface(
         "Configuración de modelo", open=True
     ),
 )
+# Necesario para cachear el pipeline de HuggingFace y no cargarlo en cada llamada:
+hf_model = HFModel()
 
 # - declaro una variable global "interfaz"
 # - en el main cargo el .env y lanzo la interfaz
@@ -127,4 +125,4 @@ interfaz = gr.ChatInterface(
 # - los cambios en el html se actualizan automáticamente
 if __name__ == "__main__":
   load_dotenv()
-  interfaz.launch(server_name="0.0.0.0", server_port=7863, inbrowser=True)
+  interface.launch(server_name="0.0.0.0", server_port=7863, inbrowser=True)
